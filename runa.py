@@ -207,7 +207,7 @@ MODES = {
 }
 
 
-OVERLAP_MS = 800  # audio re-heard across step boundaries
+OVERLAP_MS_DEFAULT = 800  # audio re-heard across step boundaries (flag --overlap-ms)
 
 
 def dedupe(new: str, prev: str) -> str:
@@ -238,7 +238,7 @@ def run_mic(args):
     step, window = mode["step"], mode["window"]
     frame = 1024  # samples per callback
     ring = RingBuffer(args.max_buffer_seconds)
-    vad = EnergyVAD()
+    vad = EnergyVAD(threshold=args.vad_threshold, hang_frames=args.vad_hang)
     pending = ""           # current partial shown
     last_text = ""         # last emitted text (for overlap dedupe)
     speech: deque = deque()  # windows belonging to the open segment
@@ -264,7 +264,7 @@ def run_mic(args):
             samples = np.concatenate(tuple(speech))
             # OVERLAP CARRY: retain the tail of this segment for the next one so a
             # word straddling the step boundary is re-heard instead of split.
-            carry_len = SR * OVERLAP_MS // 1000
+            carry_len = SR * args.overlap_ms // 1000
             carry = samples[-carry_len:] if len(samples) > carry_len else samples.copy()
             # padding: context around the gated segment (flags: --pre-roll-ms/--post-roll-ms)
             pre = ring.tail(SR * args.pre_roll_ms // 1000)
@@ -353,6 +353,12 @@ def main():
                     help="audio context before each chunk in ms (catches word onsets; default 500)")
     ap.add_argument("--post-roll-ms", type=int, default=300,
                     help="audio context after each chunk in ms (catches word endings; default 300)")
+    ap.add_argument("--overlap-ms", type=int, default=800,
+                    help="audio re-heard across step boundaries (dedup handles repeats; default 800)")
+    ap.add_argument("--vad-threshold", type=float, default=0.004,
+                    help="energy VAD sensitivity: lower = catches quieter speech (default 0.004)")
+    ap.add_argument("--vad-hang", type=int, default=12,
+                    help="quiet frames before an endpoint is declared; higher = fewer, longer segments (default 12)")
     args = ap.parse_args()
 
     if not os.path.exists(args.model):

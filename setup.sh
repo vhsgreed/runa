@@ -12,6 +12,7 @@ $SUDO apt-get update -qq
 $SUDO apt-get install -y -qq \
   build-essential cmake git curl ca-certificates pkg-config \
   libsdl2-dev libvulkan-dev vulkan-tools glslc \
+  spirv-headers vulkan-headers \
   python3 python3-pip python3-venv python3-numpy
 
 echo "==> [2/4] Python deps"
@@ -52,7 +53,9 @@ fi
 
 echo "==> [4/4] Models"
 mkdir -p "$MODELS_DIR"
-bash "$WHISPER_DIR/models/download-ggml-model.sh" base --outdir "$MODELS_DIR"
+# download-ggml-model.sh takes the models dir as a POSITIONAL arg (it does not
+# support --outdir; that printed the usage banner and downloaded nothing).
+bash "$WHISPER_DIR/models/download-ggml-model.sh" base "$MODELS_DIR"
 curl -sL -o "$MODELS_DIR/ggml-silero-v5.1.2.bin" \
   https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 

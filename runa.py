@@ -247,7 +247,7 @@ def run_mic(args):
     t0 = time.time()
 
     def on_chunk(chunk: np.ndarray):
-        nonlocal pending, voice_seen, until_next_emit
+        nonlocal pending, voice_seen, until_next_emit, last_text
         ring.push(chunk)
         voiced = vad.is_voice(chunk)
         endpoint = vad.update(chunk, frame / SR)

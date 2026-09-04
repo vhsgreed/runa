@@ -207,6 +207,26 @@ MODES = {
 }
 
 
+OVERLAP_MS = 800  # audio re-heard across step boundaries
+
+
+def dedupe(new: str, prev: str) -> str:
+    """Strip the duplicated head of `new` when it repeats the tail of `prev`.
+
+    Overlap-carry re-feeds audio, so whisper may re-emit the last words.
+    Match word-level overlaps (case-insensitive), longest first.
+    """
+    w_new = new.split()
+    w_prev = prev.split()
+    max_ov = min(len(w_new), len(w_prev), 6)
+    for k in range(max_ov, 0, -1):
+        tail = [w.lower().strip(".,!?;:") for w in w_prev[-k:]]
+        head = [w.lower().strip(".,!?;:") for w in w_new[:k]]
+        if tail == head:
+            return " ".join(w_new[k:])
+    return new
+
+
 def ts() -> str:
     return time.strftime("%H:%M:%S")
 
@@ -220,6 +240,7 @@ def run_mic(args):
     ring = RingBuffer(args.max_buffer_seconds)
     vad = EnergyVAD()
     pending = ""           # current partial shown
+    last_text = ""         # last emitted text (for overlap dedupe)
     speech: deque = deque()  # windows belonging to the open segment
     voice_seen = False
     until_next_emit = step
@@ -241,9 +262,12 @@ def run_mic(args):
 
         if voice_seen and (endpoint or until_next_emit <= 0 or len(speech) * frame >= SR * window):
             samples = np.concatenate(tuple(speech))
+            # OVERLAP CARRY: retain the tail of this segment for the next one so a
+            # word straddling the step boundary is re-heard instead of split.
+            carry_len = SR * OVERLAP_MS // 1000
+            carry = samples[-carry_len:] if len(samples) > carry_len else samples.copy()
             # padding: context around the gated segment (flags: --pre-roll-ms/--post-roll-ms)
             pre = ring.tail(SR * args.pre_roll_ms // 1000)
-            post = ring.tail(SR * args.post_roll_ms // 1000)
             if len(pre) and len(samples):
                 samples = np.concatenate((pre, samples))
             samples = np.pad(samples, (0, max(0, SR * args.post_roll_ms // 1000)))
@@ -251,11 +275,17 @@ def run_mic(args):
             voice_seen = False
             vad.quiet_run = 0
             until_next_emit = step
+            speech.append(carry)  # re-heard at the start of the next segment
             final = bool(endpoint)
             text = tr.transcribe_window(samples, final=final)
+            if text and last_text:
+                text = dedupe(text, last_text)
+            if text:
+                last_text = text
             if final:
                 if text:
                     print(f"[{ts()}] FINAL   {text}", flush=True)
+                    last_text = text
                 pending = ""
             elif text:
                 pending = text

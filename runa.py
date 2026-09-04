@@ -120,6 +120,21 @@ class RingBuffer:
         self._buf.append(chunk)
         self._len = min(self._len + len(chunk), self._buf.maxlen * 1024)
 
+    def tail(self, n: int) -> np.ndarray:
+        """Last n samples without consuming (for pre/post-roll padding)."""
+        if n <= 0 or self._len == 0:
+            return np.empty(0, dtype=SAMPLE_DTYPE)
+        take = min(n, self._len)
+        out = []
+        got = 0
+        for chunk in reversed(self._buf):
+            if got >= take:
+                break
+            out.append(chunk)
+            got += len(chunk)
+        buf = np.concatenate(tuple(reversed(out)))
+        return buf[-take:]
+
     def extend(self, chunks) -> None:
         for c in chunks:
             self.push(c)
@@ -226,6 +241,12 @@ def run_mic(args):
 
         if voice_seen and (endpoint or until_next_emit <= 0 or len(speech) * frame >= SR * window):
             samples = np.concatenate(tuple(speech))
+            # padding: context around the gated segment (flags: --pre-roll-ms/--post-roll-ms)
+            pre = ring.tail(SR * args.pre_roll_ms // 1000)
+            post = ring.tail(SR * args.post_roll_ms // 1000)
+            if len(pre) and len(samples):
+                samples = np.concatenate((pre, samples))
+            samples = np.pad(samples, (0, max(0, SR * args.post_roll_ms // 1000)))
             speech.clear()
             voice_seen = False
             vad.quiet_run = 0
@@ -274,7 +295,7 @@ def run_wav(args):
         chunk = samples[off: off + step]
         if not vad.is_voice(chunk) and not vad.quiet_run:
             continue
-        seg = samples[max(0, off - SR // 2): min(len(samples), off + step + SR // 4)]
+        seg = samples[max(0, off - SR * args.pre_roll_ms // 1000): min(len(samples), off + step + SR * args.post_roll_ms // 1000)]
         if len(seg) < SR // 4:
             continue
         seg = np.pad(seg[:win], (0, max(0, win - len(seg[:win]))))[:win]
@@ -298,6 +319,10 @@ def main():
     ap.add_argument("--threads", type=int, default=max(2, (os.cpu_count() or 4) // 2))
     ap.add_argument("--max-buffer-seconds", type=int, default=MAX_BUFFER_SECONDS)
     ap.add_argument("--wav", help="offline mode: transcribe this WAV instead of the mic")
+    ap.add_argument("--pre-roll-ms", type=int, default=500,
+                    help="audio context before each chunk in ms (catches word onsets; default 500)")
+    ap.add_argument("--post-roll-ms", type=int, default=300,
+                    help="audio context after each chunk in ms (catches word endings; default 300)")
     args = ap.parse_args()
 
     if not os.path.exists(args.model):

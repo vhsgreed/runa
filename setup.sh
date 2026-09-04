@@ -56,6 +56,10 @@ mkdir -p "$MODELS_DIR"
 # download-ggml-model.sh takes the models dir as a POSITIONAL arg (it does not
 # support --outdir; that printed the usage banner and downloaded nothing).
 bash "$WHISPER_DIR/models/download-ggml-model.sh" base "$MODELS_DIR"
+# optional accuracy tier (recommended on 16GB + Vulkan): RUNA_EXTRA_MODELS="large-v3-turbo"
+for m in ${RUNA_EXTRA_MODELS:-}; do
+  bash "$WHISPER_DIR/models/download-ggml-model.sh" "$m" "$MODELS_DIR"
+done
 curl -sL -o "$MODELS_DIR/ggml-silero-v5.1.2.bin" \
   https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 

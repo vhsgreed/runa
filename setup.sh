@@ -12,7 +12,7 @@ $SUDO apt-get update -qq
 $SUDO apt-get install -y -qq \
   build-essential cmake git curl ca-certificates pkg-config \
   libsdl2-dev libvulkan-dev vulkan-tools glslc \
-  spirv-headers vulkan-headers \
+  spirv-headers \
   python3 python3-pip python3-venv python3-numpy
 
 echo "==> [2/4] Python deps"

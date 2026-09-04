@@ -1,0 +1,5 @@
+whisper.cpp/
+models/*.bin
+models/samples/
+__pycache__/
+BUILD-MODE.txt

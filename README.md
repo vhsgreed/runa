@@ -107,3 +107,7 @@ needed).
   portal), Flathub release.
 - Later: speaker diarization, word-level timestamps UI, WhisperVulkan
   tuning for RDNA3 (wave64), streaming websocket server mode.
+
+## Links
+
+Part of the [vhsgreed](https://vhsgreed.win) toolset: data, code, and methods in the open.
